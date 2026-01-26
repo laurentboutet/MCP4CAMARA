@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: camara-mcp-service
+  namespace: default
+  labels:
+    app: camara-mcp
+spec:
+  type: ClusterIP
+  selector:
+    app: camara-mcp
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: camara-mcp-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - mcp.yourdomain.com
+    secretName: camara-mcp-tls
+  rules:
+  - host: mcp.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: camara-mcp-service
+            port:
+              number: 8000

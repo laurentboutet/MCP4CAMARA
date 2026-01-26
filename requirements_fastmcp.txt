@@ -1,0 +1,7 @@
+# CAMARA FastMCP Server - Python Dependencies
+# Production-ready - Tested with Python 3.13+
+
+fastmcp>=0.2.0
+httpx>=0.27.0
+python-dotenv>=1.0.0
+uvicorn[standard]>=0.30.0  # For server mode

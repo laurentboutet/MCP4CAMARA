@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  camara-mcp:
+    build: .
+    image: camara-mcp:latest
+    container_name: camara-mcp-server
+    ports:
+      - "8000:8000"
+    environment:
+      - CAMARA_BASE_URL=${CAMARA_BASE_URL}
+      - CAMARA_API_KEY=${CAMARA_API_KEY}
+      - CAMARA_VERSION=${CAMARA_VERSION:-spring25}
+      - CAMARA_TIMEOUT=${CAMARA_TIMEOUT:-30}
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - camara-net
+
+  # Optional: Load balancer
+  nginx:
+    image: nginx:alpine
+    container_name: camara-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - camara-mcp
+    networks:
+      - camara-net
+
+networks:
+  camara-net:
+    driver: bridge

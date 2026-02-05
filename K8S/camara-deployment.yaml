@@ -66,22 +66,21 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
+       # TCP PROBES (simplest)
         livenessProbe:
-          httpGet:
-            path: /health
+          tcpSocket:
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
         readinessProbe:
-          httpGet:
-            path: /health
+          tcpSocket:
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
-          failureThreshold: 3
+          failureThreshold: 3        
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

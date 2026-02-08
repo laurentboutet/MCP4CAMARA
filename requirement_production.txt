@@ -1,0 +1,10 @@
+# HTTP client for CAMARA APIs
+httpx>=0.27.0
+python-dotenv>=1.0.0
+
+# FastAPI for HTTP server
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# Official MCP SDK for proper SSE transport
+#mcp>=0.9.0

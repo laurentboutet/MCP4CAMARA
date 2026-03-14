@@ -14,7 +14,7 @@ import sys
 import json
 import uuid
 import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 # Encoding fix
 if sys.platform == "win32":
@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 # FastAPI for HTTP server (Streamable HTTP protocol)
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import uvicorn
@@ -155,7 +155,7 @@ API_ENDPOINTS = {
     },
 }
 
-logger.info(f"CAMARA Server - {CAMARA_VERSION.upper()} ({len(API_ENDPOINTS)} endpoints)")
+logger.info(f"🚀 CAMARA Server - {CAMARA_VERSION.upper()} ({len(API_ENDPOINTS)} endpoints)")
 
 # =============================================================================
 # CAMARA API REQUEST HANDLER
@@ -180,7 +180,7 @@ async def camara_request(endpoint_key: str, method: str = "POST",
         url = f"{CAMARA_BASE_URL.rstrip('/')}{path}"
         
         # LOG REQUEST
-        logger.info(f"      CAMARA API Call:")
+        logger.info(f"   🔹 CAMARA API Call:")
         logger.info(f"      Method: {method}")
         logger.info(f"      URL: {url}")
         logger.info(f"      Endpoint: {endpoint_key}")
@@ -198,7 +198,7 @@ async def camara_request(endpoint_key: str, method: str = "POST",
             return {"error": f"Unsupported method: {method}"}
         
         # LOG RESPONSE
-        logger.info(f"      CAMARA Response:")
+        logger.info(f"   🔹 CAMARA Response:")
         logger.info(f"      Status: {resp.status_code}")
         logger.info(f"      Content-Length: {len(resp.content)}")
         logger.info(f"      Content-Type: {resp.headers.get('content-type')}")
@@ -209,7 +209,7 @@ async def camara_request(endpoint_key: str, method: str = "POST",
  # PARSE RESPONSE BASED ON STATUS CODE
         if resp.status_code == 204:
             # 204 No Content - operation succeeded, no data returned
-            logger.info(f"   204 No Content - Operation successful")
+            logger.info(f"   ✅ 204 No Content - Operation successful")
             return {
                 "status": "success",
                 "message": "Operation completed successfully (no content returned)",
@@ -221,10 +221,10 @@ async def camara_request(endpoint_key: str, method: str = "POST",
             if resp.content:
                 try:
                     parsed = resp.json()
-                    logger.info(f"   200 OK - JSON data returned")
+                    logger.info(f"   ✅ 200 OK - JSON data returned")
                     return parsed
                 except json.JSONDecodeError as e:
-                    logger.error(f"   200 OK but invalid JSON: {e}")
+                    logger.error(f"   ❌ 200 OK but invalid JSON: {e}")
                     return {
                         "error": "invalid_json",
                         "detail": resp.text[:1000],
@@ -232,7 +232,7 @@ async def camara_request(endpoint_key: str, method: str = "POST",
                     }
             else:
                 # 200 with empty body - unusual but treat as success
-                logger.warning(f"    200 OK but empty body")
+                logger.warning(f"   ⚠️  200 OK but empty body")
                 return {
                     "status": "success",
                     "message": "Operation returned 200 OK with no content",
@@ -250,7 +250,7 @@ async def camara_request(endpoint_key: str, method: str = "POST",
             }
     
     except httpx.HTTPStatusError as e:
-        logger.error(f" HTTP {e.response.status_code}: {e.response.text[:500]}")
+        logger.error(f"❌ HTTP {e.response.status_code}: {e.response.text[:500]}")
         
         # Try to parse error response
         try:
@@ -266,7 +266,7 @@ async def camara_request(endpoint_key: str, method: str = "POST",
         }
     
     except Exception as e:
-        logger.error(f" Exception: {type(e).__name__}: {e}")
+        logger.error(f"❌ Exception: {type(e).__name__}: {e}")
         return {
             "error": "network",
             "detail": str(e),
@@ -501,7 +501,7 @@ MCP_TOOLS = [
 
 async def execute_tool(name: str, arguments: dict) -> dict:
     """Execute CAMARA tool - all 18 tools"""
-    logger.info(f" Tool: {name}")
+    logger.info(f"📞 Tool: {name}")
     
     try:
         # 1. Device Reachability
@@ -649,9 +649,6 @@ async def execute_tool(name: str, arguments: dict) -> dict:
 # =============================================================================
 # FASTAPI - Streamable HTTP (MCP 2025-03-26)
 # =============================================================================
-# =============================================================================
-# FASTAPI - Streamable HTTP (MCP 2025-03-26)
-# =============================================================================
 
 app = FastAPI(
     title="CAMARA MCP Server",
@@ -667,7 +664,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/")
 async def root():
     return {
@@ -679,7 +675,6 @@ async def root():
         "camara_version": CAMARA_VERSION.upper()
     }
 
-
 @app.get("/health")
 async def health():
     return {
@@ -688,85 +683,74 @@ async def health():
         "base_url": CAMARA_BASE_URL
     }
 
-
-# GET /mcp — obligatoire spec 2025-03-26 (server capabilities)
-@app.get("/mcp")
-async def handle_mcp_get():
-    """MCP GET endpoint - server discovery (2025-03-26 required)"""
-    return JSONResponse(
-        content={
-            "name": "CAMARA-MCP",
-            "version": "1.0.0",
-            "protocolVersion": "2025-03-26",
-            "capabilities": {"tools": {}},
-            "endpoint": "/mcp"
-        },
-        headers={"Cache-Control": "no-cache"}
-    )
-
-
-#  POST /mcp — traitement JSON-RPC
+# MCP Streamable HTTP endpoint
 @app.post("/mcp")
 async def handle_mcp(request: Request):
     """MCP Streamable HTTP endpoint (2025-03-26 standard)"""
-    logger.info(" MCP Request")
-
+    logger.info("📨 MCP Request")
+    
     try:
         body = await request.json()
-    except Exception:
+    except:
         body = {}
-
-    method = body.get("method")
-    req_id = body.get("id", 0)
-    logger.info(f"   Method: {method}")
-
-    #  Session ID — retourné dans les headers de réponse
-    session_id = request.headers.get("Mcp-Session-Id", str(uuid.uuid4()))
-
-    if method == "initialize":
-        response = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "protocolVersion": "2025-03-26",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "CAMARA-MCP", "version": "1.0.0"}
+    
+    logger.info(f"   Method: {body.get('method')}")
+    
+    async def response_generator():
+        """Generate streaming JSON-RPC response"""
+        
+        # Initialize
+        if body.get("method") == "initialize":
+            response = {
+                "jsonrpc": "2.0",
+                "id": body.get("id"),
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "CAMARA-MCP", "version": "1.0.0"}
+                }
             }
-        }
-
-    elif method == "tools/list":
-        response = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {"tools": MCP_TOOLS}
-        }
-
-    elif method == "tools/call":
-        params = body.get("params", {})
-        result = await execute_tool(params.get("name"), params.get("arguments", {}))
-        response = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "content": [{"type": "text", "text": json.dumps(result, indent=2)}]
+            yield f"data: {json.dumps(response)}\n\n"
+        
+        # List tools
+        elif body.get("method") == "tools/list":
+            response = {
+                "jsonrpc": "2.0",
+                "id": body.get("id"),
+                "result": {"tools": MCP_TOOLS}
             }
-        }
-
-    else:
-        response = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "error": {"code": -32601, "message": f"Method not found: {method}"}
-        }
-
-    return JSONResponse(
-        content=response,
+            yield f"data: {json.dumps(response)}\n\n"
+        
+        # Call tool
+        elif body.get("method") == "tools/call":
+            params = body.get("params", {})
+            result = await execute_tool(params.get("name"), params.get("arguments", {}))
+            response = {
+                "jsonrpc": "2.0",
+                "id": body.get("id"),
+                "result": {
+                    "content": [{"type": "text", "text": json.dumps(result, indent=2)}]
+                }
+            }
+            yield f"data: {json.dumps(response)}\n\n"
+        
+        else:
+            response = {
+                "jsonrpc": "2.0",
+                "id": body.get("id", 0),
+                "error": {"code": -32601, "message": f"Method not found: {body.get('method')}"}
+            }
+            yield f"data: {json.dumps(response)}\n\n"
+    
+    return StreamingResponse(
+        response_generator(),
+        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "Mcp-Session-Id": session_id       #  Session ID dans réponse
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
         }
     )
-
 
 # =============================================================================
 # MAIN
